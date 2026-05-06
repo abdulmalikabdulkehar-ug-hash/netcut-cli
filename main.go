@@ -14,7 +14,6 @@ import (
 )
 
 func main() {
-
 	scanFlag := flag.Bool("scan", false, "Scan the network")
 	CIDR := flag.String("cidr", "", "CIDR for the network scan (defaults to interface subnet)")
 	cutFlag := flag.Bool("cut", false, "Cut off a device")
@@ -24,10 +23,41 @@ func main() {
 	ifaceName := flag.String("i", "auto", "Interface name (use 'auto' to detect)")
 	duration := flag.Duration("duration", 0, "How long to keep the device offline (e.g. 30s, 5m). 0 = until interrupted")
 	restore := flag.Bool("restore", true, "Restore device ARP cache when cut ends")
+	dryRun := flag.Bool("dry-run", false, "Do not send packets; log actions only")
+	allowlist := flag.String("allowlist", "", "Comma-separated IPs/CIDRs allowed for cut")
+	denylist := flag.String("denylist", "", "Comma-separated IPs/CIDRs blocked for cut")
+
+	webFlag := flag.Bool("web", false, "Run web UI server")
+	webAddr := flag.String("web-addr", ":8080", "Web UI listen address")
+	webGateway := flag.String("web-gateway", "", "Default gateway for web UI actions")
+	webCIDR := flag.String("web-cidr", "", "Default CIDR for web UI scan")
+	webAllowlist := flag.String("web-allowlist", "", "Comma-separated IPs/CIDRs allowed for web actions")
+	webDenylist := flag.String("web-denylist", "", "Comma-separated IPs/CIDRs blocked for web actions")
+	webDryRun := flag.Bool("web-dry-run", false, "Do not send packets from web actions")
+	webRestore := flag.Bool("web-restore", true, "Restore device after web cut")
 	flag.Parse()
 
 	scanner := networkscan.NewNetworkScanner(*ifaceName)
 	defer scanner.Close()
+
+	if *webFlag {
+		options := WebOptions{
+			Addr:      *webAddr,
+			Gateway:   *webGateway,
+			CIDR:      *webCIDR,
+			Allowlist: parseList(*webAllowlist),
+			Denylist:  parseList(*webDenylist),
+			DryRun:    *webDryRun,
+			Restore:   *webRestore,
+		}
+		if len(options.Allowlist) == 0 && len(options.Denylist) == 0 {
+			log.Printf("Warning: web UI is running without allow/deny lists. Consider adding -web-allowlist.")
+		}
+		if err := runWebServer(scanner, options); err != nil {
+			log.Fatalf("Web server error: %v", err)
+		}
+		return
+	}
 
 	if *scanFlag {
 		if *CIDR == "" {
@@ -42,6 +72,9 @@ func main() {
 	if *cutFlag {
 		if *ipAddr == "" {
 			log.Fatal("IP address is required when using the cut option.")
+		}
+		if !isAllowed(*ipAddr, parseList(*allowlist), parseList(*denylist)) {
+			log.Fatal("Target IP is blocked by policy (allowlist/denylist).")
 		}
 		if *gateway == "" {
 			log.Fatal("Gateway IP is required when using the cut option.")
@@ -69,8 +102,11 @@ func main() {
 
 		}
 		if deviceToCut != nil {
-
 			log.Printf("Cut off device: IP: %s, MAC: %s, HOSTNAME: %s\n", deviceToCut.IP, deviceToCut.MAC, deviceToCut.HOSTNAME)
+			if *dryRun {
+				log.Printf("[dry-run] skipping cut off")
+				return
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			if *duration > 0 {
 				ctx, cancel = context.WithTimeout(ctx, *duration)
