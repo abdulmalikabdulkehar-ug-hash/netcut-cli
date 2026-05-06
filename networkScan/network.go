@@ -2,6 +2,7 @@ package networkscan
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -116,12 +117,49 @@ func (ns *NetworkScanner) NetScan(targetNet string) []Device {
 	}
 }
 
-func (ns *NetworkScanner) CutOffDevice(device Device, gateway string) {
-	for {
-		routerIp := net.ParseIP(gateway).To4()
-		SendARPReply(ns.handle, device.MAC, device.IP, ns.localMAC, routerIp)
-		time.Sleep(2 * time.Second)
+func (ns *NetworkScanner) ResolveDevice(ip net.IP) (*Device, bool) {
+	if ip == nil {
+		return nil, false
 	}
+	devices := ns.NetScan(ip.String() + "/32")
+	for _, device := range devices {
+		if device.IP != nil && device.IP.Equal(ip) {
+			return &device, true
+		}
+	}
+	return nil, false
+}
+
+func (ns *NetworkScanner) CutOffDevice(ctx context.Context, device Device, gateway string) error {
+	gatewayIP := net.ParseIP(gateway).To4()
+	if gatewayIP == nil {
+		return fmt.Errorf("invalid gateway IP: %s", gateway)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			SendARPReply(ns.handle, device.MAC, device.IP, ns.localMAC, gatewayIP)
+			time.Sleep(2 * time.Second)
+		}
+	}
+}
+
+func (ns *NetworkScanner) RestoreDevice(device Device, gateway string) error {
+	gatewayIP := net.ParseIP(gateway).To4()
+	if gatewayIP == nil {
+		return fmt.Errorf("invalid gateway IP: %s", gateway)
+	}
+	gatewayDevice, ok := ns.ResolveDevice(gatewayIP)
+	if !ok {
+		return fmt.Errorf("unable to resolve gateway MAC for %s", gatewayIP.String())
+	}
+	for i := 0; i < 3; i++ {
+		SendARPReply(ns.handle, device.MAC, device.IP, gatewayDevice.MAC, gatewayIP)
+		time.Sleep(500 * time.Millisecond)
+	}
+	return nil
 }
 
 func MITM(device Device) {
