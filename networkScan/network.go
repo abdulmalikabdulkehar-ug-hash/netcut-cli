@@ -41,7 +41,10 @@ func NewNetworkScanner(ifaceName string) *NetworkScanner {
 		log.Fatalf("Error getting interface %s: %v", ifaceName, err)
 	}
 
-	localIP, localNet := ipv4Addr(iface)
+	localIP, localNet, err := ipv4Addr(iface)
+	if err != nil {
+		log.Fatalf("Error getting IPv4 address for interface %s: %v", ifaceName, err)
+	}
 	localMAC := iface.HardwareAddr
 
 	return &NetworkScanner{
@@ -138,7 +141,7 @@ func detectInterfaceName() string {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		if _, _ = ipv4Addr(&iface); true {
+		if ip, _, err := ipv4Addr(&iface); err == nil && ip != nil {
 			return iface.Name
 		}
 	}
@@ -147,10 +150,10 @@ func detectInterfaceName() string {
 	return ""
 }
 
-func ipv4Addr(iface *net.Interface) (net.IP, *net.IPNet) {
+func ipv4Addr(iface *net.Interface) (net.IP, *net.IPNet, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
-		log.Fatalf("Error getting addresses for interface %s: %v", iface.Name, err)
+		return nil, nil, fmt.Errorf("error getting addresses for interface %s: %w", iface.Name, err)
 	}
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
@@ -159,9 +162,8 @@ func ipv4Addr(iface *net.Interface) (net.IP, *net.IPNet) {
 		}
 		ip := ipNet.IP.To4()
 		if ip != nil {
-			return ip, &net.IPNet{IP: ip, Mask: ipNet.Mask}
+			return ip, &net.IPNet{IP: ip, Mask: ipNet.Mask}, nil
 		}
 	}
-	log.Fatalf("No IPv4 address found for interface %s", iface.Name)
-	return nil, nil
+	return nil, nil, fmt.Errorf("no IPv4 address found for interface %s", iface.Name)
 }
