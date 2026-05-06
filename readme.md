@@ -21,24 +21,24 @@ go mod tidy
 
 ## Usage
 
-### 1) Scan a network (auto interface + subnet)
+### 1) Scan a network (auto interface, auto CIDR)
 ```bash
 sudo go run ./main.go -scan
 ```
 
-### 2) Scan a network (custom interface + CIDR)
+### 2) Scan a network (explicit)
 ```bash
 sudo go run ./main.go -scan -cidr 192.168.0.0/24 -i wlp49s0
 ```
 
-### 3) Cut off a device by IP (until interrupted)
+### 3) Cut off a device by IP
 ```bash
 sudo go run ./main.go -cut -ip 192.168.0.2 -g 192.168.0.1 -i wlp49s0
 ```
 
-### 4) Cut off a device by IP + MAC for a fixed duration
+### 4) Cut off a device by IP + MAC
 ```bash
-sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1 -duration 2m
+sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1 -i wlp49s0
 ```
 
 ## Flags
@@ -50,9 +50,7 @@ sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1
 | `-ip` | Target IP (required for cut) |
 | `-mac` | Target MAC (optional) |
 | `-g` | Gateway IP (required for cut) |
-| `-i` | Interface name (default: auto-detect) |
-| `-duration` | How long to keep the device offline (0 = until interrupted) |
-| `-restore` | Restore device ARP cache after cut (default: true) |
+| `-i` | Interface name or `auto` (default: `auto`) |
 
 ## Example Output
 ```
