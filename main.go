@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/enigma522/netcut-cli/networkScan"
 )
@@ -17,6 +22,8 @@ func main() {
 	mac := flag.String("mac", "", "MAC address of the device to cut off (required if using cut option)")
 	gateway := flag.String("g", "", "Gateway IP address")
 	ifaceName := flag.String("i", "auto", "Interface name (use 'auto' to detect)")
+	duration := flag.Duration("duration", 0, "How long to keep the device offline (e.g. 30s, 5m). 0 = until interrupted")
+	restore := flag.Bool("restore", true, "Restore device ARP cache when cut ends")
 	flag.Parse()
 
 	scanner := networkscan.NewNetworkScanner(*ifaceName)
@@ -35,6 +42,9 @@ func main() {
 	if *cutFlag {
 		if *ipAddr == "" {
 			log.Fatal("IP address is required when using the cut option.")
+		}
+		if *gateway == "" {
+			log.Fatal("Gateway IP is required when using the cut option.")
 		}
 		var deviceToCut *networkscan.Device
 		if (*mac == "") {
@@ -61,10 +71,34 @@ func main() {
 		if deviceToCut != nil {
 
 			log.Printf("Cut off device: IP: %s, MAC: %s, HOSTNAME: %s\n", deviceToCut.IP, deviceToCut.MAC, deviceToCut.HOSTNAME)
-			scanner.CutOffDevice(*deviceToCut, *gateway)
+			ctx, cancel := context.WithCancel(context.Background())
+			if *duration > 0 {
+				ctx, cancel = context.WithTimeout(ctx, *duration)
+			}
+			defer cancel()
+
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+			go func() {
+				<-sigs
+				cancel()
+			}()
+
+			err := scanner.CutOffDevice(ctx, *deviceToCut, *gateway)
+			if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+				log.Printf("Cut off stopped with error: %v", err)
+			}
+
+			if *restore {
+				restoreErr := scanner.RestoreDevice(*deviceToCut, *gateway)
+				if restoreErr != nil {
+					log.Printf("Failed to restore device: %v", restoreErr)
+				}
+			}
 		} else {
 			log.Printf("Device with IP: %s not found\n", *ipAddr)
 		}
 	}
 
+	time.Sleep(0)
 }
