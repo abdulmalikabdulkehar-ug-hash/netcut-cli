@@ -31,14 +31,14 @@ sudo go run ./main.go -scan
 sudo go run ./main.go -scan -cidr 192.168.0.0/24 -i wlp49s0
 ```
 
-### 3) Cut off a device by IP
+### 3) Cut off a device by IP (until interrupted)
 ```bash
 sudo go run ./main.go -cut -ip 192.168.0.2 -g 192.168.0.1 -i wlp49s0
 ```
 
-### 4) Cut off a device by IP + MAC
+### 4) Cut off a device by IP + MAC for a fixed duration
 ```bash
-sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1 -i wlp49s0
+sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1 -duration 2m
 ```
 
 ## Flags
@@ -51,6 +51,8 @@ sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1
 | `-mac` | Target MAC (optional) |
 | `-g` | Gateway IP (required for cut) |
 | `-i` | Interface name (default: auto-detect) |
+| `-duration` | How long to keep the device offline (0 = until interrupted) |
+| `-restore` | Restore device ARP cache after cut (default: true) |
 
 ## Example Output
 ```
