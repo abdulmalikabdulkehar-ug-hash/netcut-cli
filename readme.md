@@ -21,17 +21,22 @@ go mod tidy
 
 ## Usage
 
-### 1) Scan a network
+### 1) Scan a network (auto interface + subnet)
+```bash
+sudo go run ./main.go -scan
+```
+
+### 2) Scan a network (custom interface + CIDR)
 ```bash
 sudo go run ./main.go -scan -cidr 192.168.0.0/24 -i wlp49s0
 ```
 
-### 2) Cut off a device by IP
+### 3) Cut off a device by IP
 ```bash
 sudo go run ./main.go -cut -ip 192.168.0.2 -g 192.168.0.1 -i wlp49s0
 ```
 
-### 3) Cut off a device by IP + MAC
+### 4) Cut off a device by IP + MAC
 ```bash
 sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1 -i wlp49s0
 ```
@@ -40,12 +45,12 @@ sudo go run ./main.go -cut -ip 192.168.0.2 -mac 7c:fd:6b:aa:bb:cc -g 192.168.0.1
 | Flag | Description |
 |------|-------------|
 | `-scan` | Scan the network |
-| `-cidr` | CIDR for scan (e.g., 192.168.0.0/24) |
+| `-cidr` | CIDR for scan (defaults to interface subnet) |
 | `-cut` | Cut off a device |
 | `-ip` | Target IP (required for cut) |
 | `-mac` | Target MAC (optional) |
 | `-g` | Gateway IP (required for cut) |
-| `-i` | Interface name (default: wlp49s0) |
+| `-i` | Interface name (default: auto-detect) |
 
 ## Example Output
 ```
